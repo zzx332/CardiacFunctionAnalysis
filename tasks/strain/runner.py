@@ -97,8 +97,6 @@ class StrainRunner:
         trainer = StrainTrainer(
             model=model, args=args,
             train_loader=train_loader,
-            image_loss=getattr(args, 'image_loss', 'ncc'),
-            smooth_weight=getattr(args, 'smooth_weight', 1.0),
             optimizers=(optimizer, scheduler),
         )
         return trainer.train()

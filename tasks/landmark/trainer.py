@@ -72,7 +72,7 @@ class LandmarkTrainer(BaseTrainer):
 
     @torch.no_grad()
     def eval(self, model, data_loader, tb_writer, epoch, sce) -> float:
-        """返回平均欧氏距离（负值，以便 is_better 判断越小越好与 BaseTrainer 统一）。"""
+        """返回平均欧氏距离（越小越好）。"""
         self.logger.info(f'Evaluating {sce}...')
         model.eval()
         H = W = getattr(self.args, 'target_size', (160, 160))[0]
@@ -142,5 +142,4 @@ class LandmarkTrainer(BaseTrainer):
         tb_writer.add_scalar(f'{sce}/SDR_3mm', avg_sdr3, epoch)
         tb_writer.add_scalar(f'{sce}/SDR_5mm', avg_sdr5, epoch)
 
-        # is_better 按越小越好，返回负值让 BaseTrainer 逻辑保持一致
-        return -avg_dist
+        return avg_dist

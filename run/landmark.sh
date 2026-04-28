@@ -2,6 +2,7 @@
 # run/landmark.sh
 python main.py \
   --task landmark \
+  --img_root_path /home/zzx/data/Landmarks \
   --train_data_path ../Cardiac_Landmark/dataset/training_rv_inserts.json \
   --val_data_path ../Cardiac_Landmark/dataset/val_rv_inserts.json \
   --model_output_path ./checkpoints/landmark \
@@ -17,5 +18,3 @@ python main.py \
   --num_workers 8 \
   --save_epoch 50 \
   --clip_grad_norm \
-  --earlystop \
-  --earlystop_patient 30

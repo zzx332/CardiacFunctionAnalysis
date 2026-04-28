@@ -95,7 +95,7 @@ class LandmarkDataset(BaseDataset):
         landmark = np.array(landmark)
         img_meta = self.load_image(self.img_root_path + file_path)
         img, landmark = self.transform(img_meta, landmark)
-        if self.sce == 'test':
+        if self.sce in ('val', 'test'):
             return img, torch.tensor(landmark, dtype=torch.float32)
         H, W = img.shape[-2:]
         heatmap = generate_gaussian_heatmaps((W, H), np.array(landmark), self.sigma)
@@ -111,6 +111,13 @@ class LandmarkDataLoader(DataLoader):
                  img_root_path='', batch_size=8, shuffle=False,
                  num_workers=8, pin_memory=True, prefetch_factor=None,
                  drop_last=False, **kwargs):
+        if sce =='train':
+            img_root_path = img_root_path + '/training/'
+        elif sce == 'val':
+            img_root_path = img_root_path + '/test/'
+        elif sce == 'test':
+            img_root_path = img_root_path + '/test/'
+            
         dataset = LandmarkDataset(
             data_path=data_path, sce=sce, transform=transform, sigma=sigma,
             debug=debug, random_state=random_state, repeat_factor=repeat_factor,

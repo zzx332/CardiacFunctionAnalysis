@@ -210,7 +210,11 @@ class Seg2DRunner:
         )
 
         target        = args.target_size
-        roi_size      = getattr(args, 'roi_size',       target if isinstance(target, list) else [target, target])
+        if isinstance(target, (list, tuple)):
+            default_roi = tuple(target)
+        else:
+            default_roi = (target, target)
+        roi_size = getattr(args, "roi_size", default_roi)
         sw_batch_size = getattr(args, 'sw_batch_size',  4)
         overlap       = getattr(args, 'overlap',         0.5)
         tta           = getattr(args, 'tta',             True)

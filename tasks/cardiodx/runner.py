@@ -2,22 +2,45 @@
 tasks/cardiodx/runner.py
 CardioDxRunner：ED+ES 双输入心脏疾病二分类任务
 """
-import torch
-import numpy as np
 import json
-from torchvision.transforms import v2
+
+import torch
 
 from .dataset import CardioDxDataLoader
 from .trainer import CardioDxTrainer
 from .data_process import create_transforms
 
+
 class CardioDxRunner:
     def __init__(self, args):
         self.args = args
 
+    def _build_model(self):
+        args = self.args
+        arch = getattr(args, 'arch', 'resnet')
+        num_classes = getattr(args, 'num_classes', 1)  # 二分类用 sigmoid
+        in_c = getattr(args, 'in_channels', 3)
+
+        if arch == 'resnet':
+            from .models.resnet import TwoStreamResNet
+            model = TwoStreamResNet(
+                in_channels=in_c,
+                num_classes=num_classes,
+                backbone_type='resnet18',
+                fusion_method='concat',
+                include_top=False,
+            )
+        else:
+            from .models.efficientnet import two_stream_efficientnetv2_s
+            model = two_stream_efficientnetv2_s(
+                in_c=in_c,
+                num_classes=num_classes,
+                fusion_method='concat',
+            )
+        return model
+
     def run(self):
         args = self.args
-        from functools import partial
         transforms_dict = create_transforms(args)
 
         # ── DataLoaders ─────────────────────────────────────────
@@ -38,26 +61,7 @@ class CardioDxRunner:
             )
 
         # ── Model ────────────────────────────────────────────────
-        arch = getattr(args, 'arch', 'resnet')
-        num_classes = getattr(args, 'num_classes', 1)  # 二分类用 sigmoid
-        in_c = getattr(args, 'in_channels', 3)
-        
-        if arch == 'resnet':
-            from .models.resnet import TwoStreamResNet
-            model = TwoStreamResNet(
-                in_channels=in_c,
-                num_classes=num_classes,
-                backbone_type='resnet18',
-                fusion_method='concat',
-                include_top=False,
-            )
-        else:
-            from .models.efficientnet import two_stream_efficientnetv2_s
-            model = two_stream_efficientnetv2_s(
-                in_c=in_c,
-                num_classes=num_classes,
-                fusion_method='concat',
-            )
+        model = self._build_model()
 
         # ── Optimizer / Scheduler ────────────────────────────────
         import math
@@ -103,3 +107,40 @@ class CardioDxRunner:
             optimizers=(optimizer, scheduler),
         )
         return trainer.train()
+
+    def test(self):
+        args = self.args
+        if not getattr(args, 'checkpoint', None):
+            raise ValueError("测试模式需要指定 --checkpoint <path>")
+        if not getattr(args, 'test_data_path', None):
+            raise ValueError("测试模式需要指定 --test_data_path <path>")
+
+        transforms_dict = create_transforms(args)
+        test_loader = CardioDxDataLoader(
+            data_path=args.test_data_path,
+            transform=transforms_dict['test'],
+            random_state=getattr(args, 'random_seed', 42),
+            infinite=False,
+            debug=args.debug,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            shuffle=False,
+        )
+
+        model = self._build_model()
+        ckpt = torch.load(args.checkpoint, map_location='cpu')
+        state = ckpt.get('model_state_dict', ckpt)
+        model.load_state_dict(state)
+        print(f"Loaded checkpoint: {args.checkpoint}")
+
+        trainer = CardioDxTrainer(
+            model=model,
+            args=args,
+            train_loader=None,
+            eval_loader=None,
+            losses_config={},
+            optimizers=(None, None),
+        )
+        metrics = trainer.predict_test(test_loader)
+        print("Test metrics:", metrics)
+        return metrics

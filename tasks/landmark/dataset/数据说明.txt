@@ -1,0 +1,7 @@
+训练集
+1. CAP_challenge_training_{01..11}文件夹下包括SA和LA的DICOM数据
+2. CAP_challenge_training_set为对应的landmard标注坐标
+
+测试集
+3. CAP_challenge_test_{01..05}文件夹下包括SA和LA的DICOM数据
+4. ValidationGroundTruthAnnotationSet为对应的landmard标注坐标

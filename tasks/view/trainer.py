@@ -6,7 +6,10 @@ import sys
 import torch
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
-
+from torch.utils.tensorboard import SummaryWriter
+import os
+import joblib
+from scipy import stats
 from common.base_trainer import BaseTrainer
 
 
@@ -72,3 +75,38 @@ class ViewTrainer(BaseTrainer):
         tb_writer.add_scalar(f'{sce}/Acc', m['acc'], epoch)
         tb_writer.add_scalar(f'{sce}/MacroF1', m['macro-f1'], epoch)
         return m['macro-f1']
+
+    @torch.no_grad()
+    def predict_tta(self, data_loader):
+        self.model.eval()
+        self.logger.info(f'*********** predict on {self.args.test_data_path}')
+        test_data_name = os.path.basename(self.args.test_data_path).split('.')[0]
+        tb_writer = SummaryWriter(log_dir=self.args.tensorboard_output_path)
+        # 打印验证进度
+        data_loader = tqdm(data_loader, desc="predict...", dynamic_ncols=True, file=sys.stdout)
+        res = []
+        y_true = []
+        for step, batch in enumerate(data_loader):
+            inputs, labels, fp = batch
+            pred = self.model(inputs.to(self.device))
+            pred = pred.argmax(axis=1).cpu()
+            pred = pred.reshape(-1) #reshpe(4,-1)
+            pred = stats.mode(pred, axis=0, keepdims=True)[0]
+            labels = labels[0:1].numpy()
+            # if any(pred!=labels):
+            #     print(pred,labels)
+            #     print(fp)
+            #     print('Failed.')
+            res.extend(pred)
+            y_true.extend(labels)
+        import joblib
+        joblib.dump( y_true,self.args.test_data_path.replace('.pkl', '_true.pkl'))
+        joblib.dump( res, self.args.test_data_path.replace('.pkl', '_pred.pkl'))
+        metrics = self.metric_function(y_true, res)
+        # tensorboard可视化，for循环加入或者直接传入字典
+        tb_writer.add_scalars(f'Test{test_data_name}/Accuracy', {'accuracy': metrics['acc']},0)
+        tb_writer.add_scalars(f'Test{test_data_name}/Recall', {f'class_{class_index}': value for class_index, value in enumerate(metrics['recall'])},0)
+        tb_writer.add_scalars(f'Test{test_data_name}/Precision', {f'class_{class_index}': value for class_index, value in enumerate(metrics['precision'])},0)
+        tb_writer.add_scalars(f'Test{test_data_name}/F1', {f'class_{class_index}': value for class_index, value in enumerate(metrics['f1'])},0)
+        tb_writer.add_scalars(f'Test{test_data_name}/', {'macro-f1': metrics['macro-f1']},0)
+        return metrics

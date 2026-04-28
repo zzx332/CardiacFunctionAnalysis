@@ -25,8 +25,8 @@ class BaseDataset(Dataset, ABC):
         if not os.path.exists(abs_path):
             raise FileNotFoundError(f"Path not found: {abs_path}")
 
-        if sce not in ['train', 'val', 'test', 'debug']:
-            raise ValueError("sce must be one of 'train', 'val', 'test', 'debug'")
+        if sce not in ['train', 'val', 'test', 'debug', 'tta']:
+            raise ValueError("sce must be one of 'train', 'val', 'test', 'debug', 'tta'")
         if not isinstance(random_state, int):
             raise TypeError("random_state must be an integer")
         if not isinstance(repeat_factor, int) or repeat_factor < 1:

@@ -64,12 +64,13 @@ class ViewDataset(BaseDataset):
 
     def collate_fn(self, batch):
         """每个 3D 体积拆成 D 张切片，分别作为独立样本。"""
-        inputs, labels = [], []
-        for sample, label, _ in batch:
+        inputs, labels, file_paths = [], [], []
+        for sample, label, file_path in batch:
             D, H, W = sample.shape
             inputs.extend(sample.reshape(D, 1, H, W))
             labels.extend([label] * D)
-        return torch.stack(inputs), torch.tensor(labels)
+            file_paths.extend([file_path] * D)
+        return torch.stack(inputs), torch.tensor(labels), file_paths
 
 
 class ViewDataLoader(DataLoader):

@@ -47,8 +47,6 @@ def build_common_args():
                    help='滑窗重叠率')
     p.add_argument('--tta',           action='store_true',
                    help='测试时数据增强（翻转 TTA）')
-    p.add_argument('--img_root_path',   type=str, default='',
-                   help='DICOM 图像根目录（landmark 任务）')
     p.add_argument('--model_output_path',      type=str, default='./checkpoints')
     p.add_argument('--tensorboard_output_path', type=str, default='./runs')
     p.add_argument('--log_file',        type=str, default=None)
@@ -78,9 +76,9 @@ def build_common_args():
     p.add_argument("--losses_config", type=str, default='{"focal_loss":{"weight":1, "gamma":2}}',
                         help="Loss functions and their weights, e.g., 'cross_entropy:0.5 mse:0.5'")
     # ── landmark 专用 ──────────────────────────────────────
+    p.add_argument('--img_root_path',   type=str, default='',
+                   help='DICOM 图像根目录（landmark 任务）')
     p.add_argument('--sigma',          type=int,   default=3)
-    # p.add_argument('--target_size',    type=int,   nargs=2, default=[160, 160])
-
     p.add_argument('--base_channel',   type=int,   default=32)
     p.add_argument('--num_joints',     type=int,   default=2)
     p.add_argument('--head',           type=str,   default='srp',
@@ -108,7 +106,7 @@ def build_common_args():
     # ── strain 专用（VoxelMorph 配准）─────────────────
     p.add_argument('--image_loss',   type=str,   default='ncc',
                    choices=['ncc', 'mse'])
-    p.add_argument('--smooth_weight', type=float, default=1.0)
+    p.add_argument('--weights', type=float, nargs='+', default=[1, 0.01, 1, 1])
     p.add_argument('--int_steps',    type=int,   default=7)
     p.add_argument('--int_downsize', type=int,   default=2)
     p.add_argument('--bidir',        action='store_true')

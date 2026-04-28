@@ -17,8 +17,7 @@ class StrainTrainer:
     配准任务训练器（不继承 BaseTrainer，因为损失计算方式特殊）。
     """
 
-    def __init__(self, model, args, train_loader, eval_loader=None,
-                 image_loss='ncc', smooth_weight=1.0, optimizers=(None, None)):
+    def __init__(self, model, args, train_loader, eval_loader=None, optimizers=(None, None)):
         self.logger = LoggerSingleton()
         self.model = model
         self.device = args.device
@@ -30,19 +29,19 @@ class StrainTrainer:
         self.scheduler = optimizers[1]
 
         # 配准专用损失（从 tasks/strain/models/ 导入）
-        from .models.losses import NCC, MSE, Grad, MultiClassBatchDiceLoss, RadialDirectionLoss
-        if image_loss == 'ncc':
+        from common.losses import NCC, MSE, Grad, MultiClassBatchDiceLoss_strain, RadialDirectionLoss
+        if args.image_loss == 'ncc':
             self.sim_loss = NCC().loss
-        elif image_loss == 'mse':
+        elif args.image_loss == 'mse':
             self.sim_loss = MSE().loss
         else:
-            raise ValueError(f"image_loss must be 'ncc' or 'mse', got {image_loss}")
+            raise ValueError(f"image_loss must be 'ncc' or 'mse', got {args.image_loss}")
 
         self.smooth_loss = Grad('l2', loss_mult=getattr(args, 'int_downsize', 2)).loss
-        self.dice_loss   = MultiClassBatchDiceLoss(
+        self.dice_loss   = MultiClassBatchDiceLoss_strain(
             torch.tensor([0, 0.6, 1.4]), include_background=False, num_classes=3)
         self.radial_loss = RadialDirectionLoss()
-        self.smooth_weight = smooth_weight
+        self.weights = getattr(args, 'weights', [1, 0.01, 1, 1])
 
     def train_one_epoch(self, epoch, tb_writer):
         self.model.train()
@@ -64,7 +63,7 @@ class StrainTrainer:
             loss_dice    = self.dice_loss(moved_gt.squeeze(), fixed_gt)
             loss_radial  = self.radial_loss(flow_fullsize, fixed_gt == 2, directions)
 
-            total_loss = loss_sim + self.smooth_weight * loss_smooth + loss_dice + loss_radial
+            total_loss = loss_sim * self.weights[0] + loss_smooth * self.weights[1] + loss_dice * self.weights[2] + loss_radial * self.weights[3]
             total_loss.backward()
             if getattr(self.args, 'clip_grad_norm', False):
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 12)

@@ -1,11 +1,11 @@
 """tasks/seg3d/runner.py"""
 import torch
 import torchio as tio
+import json
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 
-from common.losses import DiceLoss, MyLoss
 from .dataset import Seg3DDataset, get_split
 from .trainer import Seg3DTrainer
 
@@ -73,11 +73,12 @@ class Seg3DRunner:
                          weight_decay=getattr(args, 'weight_decay', 1e-4))
         scheduler = StepLR(optimizer, step_size=getattr(args, 'step_lr', 2),
                            gamma=getattr(args, 'lr_decay', 0.985))
-
+        if isinstance(args.losses_config, str):
+            losses_config = json.loads(args.losses_config)
         trainer = Seg3DTrainer(
             model=model, args=args,
             train_loader=train_loader, eval_loader=val_loader,
-            losses_config={'dice_loss': {'batch_dice': True, 'weight': 1.0}},
+            losses_config=losses_config,
             optimizers=(optimizer, scheduler),
         )
         return trainer.train()

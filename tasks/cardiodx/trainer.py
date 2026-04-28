@@ -5,7 +5,11 @@ CardioDx Trainer：step-based 训练循环，二分类，渐进平衡采样
 """
 import os
 import sys
+
+import joblib
+import numpy as np
 import torch
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score, roc_auc_score
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from torchmetrics import MetricCollection
@@ -89,9 +93,18 @@ class CardioDxTrainer(BaseTrainer):
         self.logger.info(f"Saved checkpoint: {path}")
 
     def train(self):
-        iter_per_epoch = getattr(self.args, 'iter_per_epoch', None)
-        self.logger.info(f"Total steps: {self.total_steps}")
+        """Main training loop controlled by total steps"""
+        self.logger.info(f"Training for {self.total_steps} steps")
+        self.logger.info(f"Train examples: {len(self.train_loader.dataset)}")
+        self.logger.info(f"Train batches per epoch: {len(self.train_loader)}")
 
+        if self.eval_loader:
+            self.logger.info(f"Val examples: {len(self.eval_loader.dataset)}")
+            self.logger.info(f"Val batches per epoch: {len(self.eval_loader)}")
+
+        self.logger.info('Start Training...')
+        
+        iter_per_epoch = getattr(self.args, 'iter_per_epoch', None)
         while self.current_step < self.total_steps:
             self.current_epoch += 1
             self.model.train()
@@ -127,3 +140,68 @@ class CardioDxTrainer(BaseTrainer):
 
         self.save(os.path.join(self.args.model_output_path, 'final.pt'))
         return self.model
+
+    @torch.no_grad()
+    def predict_test(self, data_loader):
+        self.model.eval()
+        self.logger.info(f'*********** predict on {self.args.test_data_path}')
+        test_data_name = os.path.basename(self.args.test_data_path).split('.')[0]
+        tb_writer = SummaryWriter(log_dir=self.args.tensorboard_output_path)
+
+        y_true = []
+        y_prob = []
+        y_pred = []
+        for batch in tqdm(data_loader, desc="predict...", dynamic_ncols=True, file=sys.stdout):
+            ed = batch['ed'].to(self.device, non_blocking=True)
+            es = batch['es'].to(self.device, non_blocking=True)
+            labels = batch['label'].to(self.device, non_blocking=True).float()
+
+            logits = self.model(ed, es).squeeze().float()
+            probs = torch.sigmoid(logits)
+            preds = (probs > 0.5).long()
+
+            y_true.extend(labels.long().cpu().numpy().tolist())
+            y_prob.extend(probs.cpu().numpy().reshape(-1).tolist())
+            y_pred.extend(preds.cpu().numpy().reshape(-1).tolist())
+
+        y_true = np.asarray(y_true, dtype=np.int64)
+        y_pred = np.asarray(y_pred, dtype=np.int64)
+        y_prob = np.asarray(y_prob, dtype=np.float32)
+
+        metrics = {
+            'accuracy': accuracy_score(y_true, y_pred),
+            'precision': precision_score(y_true, y_pred, zero_division=0),
+            'recall': recall_score(y_true, y_pred, zero_division=0),
+            'f1': f1_score(y_true, y_pred, zero_division=0),
+        }
+        if len(np.unique(y_true)) > 1:
+            metrics['auroc'] = roc_auc_score(y_true, y_prob)
+        else:
+            metrics['auroc'] = 0.0
+
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+        tn, fp, fn, tp = cm.ravel()
+        metrics['specificity'] = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+
+        result_file = os.path.join(self.args.model_output_path, f'{test_data_name}_test_results.txt')
+        os.makedirs(self.args.model_output_path, exist_ok=True)
+        with open(result_file, 'w', encoding='utf-8') as f:
+            f.write("CardioDx Test Results\n")
+            f.write("=" * 50 + "\n\n")
+            f.write("Metrics:\n")
+            for k in ['accuracy', 'precision', 'recall', 'specificity', 'f1', 'auroc']:
+                f.write(f"{k}: {metrics[k]:.6f}\n")
+            f.write("\nConfusion Matrix:\n")
+            f.write(f"TN: {tn}\nFP: {fp}\nFN: {fn}\nTP: {tp}\n")
+            f.write("\nProbability Stats:\n")
+            f.write(f"mean_prob: {float(y_prob.mean()):.6f}\n")
+            f.write(f"std_prob: {float(y_prob.std()):.6f}\n")
+            f.write(f"min_prob: {float(y_prob.min()):.6f}\n")
+            f.write(f"max_prob: {float(y_prob.max()):.6f}\n")
+
+        tb_writer.add_scalars(f'Test{test_data_name}/Metrics', metrics, 0)
+        self.logger.info(
+            "Test metrics: "
+            + ", ".join([f"{k}={v:.4f}" for k, v in metrics.items()])
+        )
+        return metrics
