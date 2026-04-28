@@ -1,0 +1,44 @@
+name: cardiacai
+channels:
+  # 清华 conda 镜像（国内加速）
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - defaults
+
+dependencies:
+  # ── Python ──────────────────────────────────────────────
+  - python=3.10
+
+  # ── PyTorch（CUDA 11.8，如需其他 CUDA 版本请修改 pytorch-cuda）
+  # - pytorch>=2.0.0
+  # - torchvision
+  # - pytorch-cuda=11.8
+
+  # ── 科学计算 ────────────────────────────────────────────
+  - numpy>=1.24
+  - scipy
+  - scikit-learn
+  - scikit-image
+
+  # ── 医学影像 IO ─────────────────────────────────────────
+  - simpleitk          # SAX/CH4 分割
+  - pydicom            # Landmark/View DICOM 读取
+
+  # ── 数据处理 / 可视化 ───────────────────────────────────
+  - joblib             # View/Seg 数据加载
+  - tqdm
+  - matplotlib
+  - opencv             # SAX 后处理
+
+  # ── pip 安装（conda 无或版本不够新）─────────────────────
+  - pip
+  - pip:
+    - torch-tb-profiler
+    # - tensorboard>=2.12
+    - torchmetrics>=1.0        # Dice/HausdorffDistance
+    - albumentations>=1.3      # Landmark 数据增强（含 keypoints）
+    - nibabel>=5.0             # View/SAX NIfTI 读取
+    # - torchio>=0.19            # SAX 3D TorchIO pipeline
+    - termcolor                # 日志颜色
