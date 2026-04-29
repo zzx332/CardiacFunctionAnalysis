@@ -2,8 +2,8 @@
 # run/view.sh
 # python main.py \
 #   --task view \
-#   --train_data_path ../Cardiac_View/dataset/SADSB_train.pkl \
-#   --val_data_path   ../Cardiac_View/dataset/SADSB_val.pkl \
+#   --train_data_path ./tasks/view/dataset/SADSB_train.pkl \
+#   --val_data_path   ./tasks/view/dataset/SADSB_val.pkl \
 #   --arch efficientnetv2_s \
 #   --model_output_path ./checkpoints/view \
 #   --tensorboard_output_path ./runs/view \
@@ -19,7 +19,7 @@
 #   --losses_config='{"focal_loss":{"weight":1, "gamma":2}}'
 
 python main.py --task view --mode test \
-  --test_data_path ../Cardiac_View/dataset/MnM2_files.pkl \
+  --test_data_path ./tasks/view/dataset/MnM2_files.pkl \
   --checkpoint ./checkpoints/view/best_checkpoint.pt \
   --arch efficientnetv2_s \
   --target_size 352 \

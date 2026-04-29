@@ -2,8 +2,8 @@
 # run/seg2d.sh
 # python main.py \
 #   --task seg2d \
-#   --train_data_path ../CH4_Segmentation/dataset/MnMs2_train.pkl \
-#   --val_data_path ../CH4_Segmentation/dataset/MnMs2_val.pkl \
+#   --train_data_path ./tasks/seg2d/dataset/MnMs2_train.pkl \
+#   --val_data_path ./tasks/seg2d/dataset/MnMs2_val.pkl \
 #   --num_classes 4 \
 #   --model_output_path ./checkpoints/seg2d \
 #   --tensorboard_output_path ./runs/seg2d \
@@ -25,7 +25,7 @@
 #                 "ce_loss_ch4seg":{"weight":1}}' \
 
 python main.py --task seg2d --mode test \
-  --test_data_path ../CH4_Segmentation/dataset/MnMs2_test.pkl \
+  --test_data_path ./tasks/seg2d/dataset/MnMs2_test.pkl \
   --checkpoint ./checkpoints/seg2d/checkpoint-299.pt \
   --num_classes 4 \
   --network_config '{"layers":[32, 64, 128, 256, 512, 512, 512], "deep_supervision":true, "nonlinearity":"LeakyReLU", "dropout":0}' \

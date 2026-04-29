@@ -24,7 +24,7 @@
 #   --losses_config='{"ce_loss":{"weight":1,"class_weights":[1]}}'
 
 python main.py --task cardiodx --mode test \
-  --test_data_path ../CardioDx/dataset/test_dataset.pkl \
+  --test_data_path ./tasks/cardiodx/dataset/test_dataset.pkl \
   --checkpoint ./checkpoints/cardiodx/best.pt \
   --model_output_path ./checkpoints/cardiodx \
   --tensorboard_output_path ./runs/cardiodx_test \

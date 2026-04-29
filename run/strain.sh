@@ -2,7 +2,7 @@
 # run/strain.sh — 心肌配准（VoxelMorph）
 python main.py \
   --task strain \
-  --train_data_path ../Myocardial_Strain/dataset/train_file_paths.pkl \
+  --train_data_path ./tasks/strain/dataset/train_file_paths.pkl \
   --model_output_path ./checkpoints/strain \
   --tensorboard_output_path ./runs/strain \
   --target_size 128 128 \

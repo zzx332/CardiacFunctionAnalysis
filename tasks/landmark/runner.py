@@ -18,6 +18,14 @@ class LandmarkRunner:
     def __init__(self, args):
         self.args = args
 
+    def _build_model(self):
+        args = self.args
+        return HighResolutionNet(
+            base_channel=args.base_channel,
+            num_joints=args.num_joints,
+            head=args.head,
+        )
+
     def run(self):
         args = self.args
         # ── Data ──────────────────────────────────────────────
@@ -48,11 +56,7 @@ class LandmarkRunner:
             )
 
         # ── Model ─────────────────────────────────────────────
-        model = HighResolutionNet(
-            base_channel=args.base_channel,
-            num_joints=args.num_joints,
-            head=args.head,
-        )
+        model = self._build_model()
 
         # ── Optimizer / Scheduler ─────────────────────────────
         optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -69,3 +73,40 @@ class LandmarkRunner:
             optimizers=(optimizer, scheduler),
         )
         return trainer.train()
+
+    def test(self):
+        args = self.args
+        if not getattr(args, 'checkpoint', None):
+            raise ValueError("测试模式需要指定 --checkpoint <path>")
+        if not getattr(args, 'test_data_path', None):
+            raise ValueError("测试模式需要指定 --test_data_path <path>")
+
+        test_loader = LandmarkDataLoader(
+            data_path=args.test_data_path,
+            sce='test',
+            transform=partial(transforms_img_landmark, args=args, sec='test'),
+            sigma=args.sigma,
+            debug=args.debug,
+            img_root_path=args.img_root_path,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            shuffle=False,
+        )
+
+        model = self._build_model()
+        ckpt = torch.load(args.checkpoint, map_location='cpu')
+        state = ckpt.get('model_state_dict', ckpt)
+        model.load_state_dict(state)
+        print(f"Loaded checkpoint: {args.checkpoint}")
+
+        trainer = LandmarkTrainer(
+            model=model,
+            args=args,
+            train_loader=None,
+            eval_loader=None,
+            losses_config={},
+            optimizers=(None, None),
+        )
+        metrics = trainer.predict_test(test_loader)
+        print("Test metrics:", metrics)
+        return metrics

@@ -4,11 +4,13 @@ tasks/landmark/trainer.py
 迁移自 Cardiac_Landmark/trainer.py
 """
 import sys
+import os
 import json
 import time
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 from common.base_trainer import BaseTrainer
 
@@ -143,3 +145,104 @@ class LandmarkTrainer(BaseTrainer):
         tb_writer.add_scalar(f'{sce}/SDR_5mm', avg_sdr5, epoch)
 
         return avg_dist
+
+    @torch.no_grad()
+    def predict_test(self, data_loader):
+        self.model.eval()
+        self.logger.info(f'*********** predict on {self.args.test_data_path}')
+        test_data_name = os.path.basename(self.args.test_data_path).split('.')[0]
+        tb_writer = SummaryWriter(log_dir=self.args.tensorboard_output_path)
+
+        H, W = getattr(self.args, 'target_size', (160, 160))
+        device = self.device
+        y_coords = torch.arange(H, device=device).float()
+        x_coords = torch.arange(W, device=device).float()
+        grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing='ij')
+        grid_y = grid_y.reshape(-1)
+        grid_x = grid_x.reshape(-1)
+
+        soft_dists, soft_sdr3, soft_sdr5 = [], [], []
+        hard_dists, hard_sdr3, hard_sdr5 = [], [], []
+        sample_count = 0
+        for imgs, landmarks in tqdm(data_loader, desc="predict...", dynamic_ncols=True, file=sys.stdout):
+            imgs = imgs.to(device, non_blocking=True)
+            pred = self.model(imgs)
+            if isinstance(pred, list):
+                pred = pred[-1]
+
+            bsz, channels, _, _ = pred.shape
+            flat = pred.reshape(bsz, channels, -1)
+
+            # 普通版本：argmax 解码坐标
+            hard_index = torch.argmax(flat, dim=-1)
+            rows, cols = torch.unravel_index(hard_index, (H, W))
+            hard_coords = torch.stack([cols, rows], dim=-1).cpu().float()
+
+            # 高斯拟合版本：期望坐标解码
+            norm = flat.sum(dim=-1, keepdim=True) + 1e-6
+            x_exp = (grid_x * flat).sum(-1) / norm.squeeze(-1)
+            y_exp = (grid_y * flat).sum(-1) / norm.squeeze(-1)
+            soft_coords = torch.stack([x_exp, y_exp], dim=-1).cpu()
+
+            lm = landmarks.float()
+            hard_dist = torch.norm(lm - hard_coords, dim=-1)
+            soft_dist = torch.norm(lm - soft_coords, dim=-1)
+
+            hard_dists.append(hard_dist)
+            hard_sdr3.append((hard_dist <= 3.0).float().mean())
+            hard_sdr5.append((hard_dist <= 5.0).float().mean())
+
+            soft_dists.append(soft_dist)
+            soft_sdr3.append((soft_dist <= 3.0).float().mean())
+            soft_sdr5.append((soft_dist <= 5.0).float().mean())
+            sample_count += bsz
+
+        hard_avg_dist = torch.cat(hard_dists).mean().item()
+        hard_avg_sdr3 = torch.stack(hard_sdr3).mean().item()
+        hard_avg_sdr5 = torch.stack(hard_sdr5).mean().item()
+        soft_avg_dist = torch.cat(soft_dists).mean().item()
+        soft_avg_sdr3 = torch.stack(soft_sdr3).mean().item()
+        soft_avg_sdr5 = torch.stack(soft_sdr5).mean().item()
+        metrics = {
+            'hard_avg_euclidean_distance': hard_avg_dist,
+            'hard_sdr_3mm': hard_avg_sdr3,
+            'hard_sdr_5mm': hard_avg_sdr5,
+            'soft_avg_euclidean_distance': soft_avg_dist,
+            'soft_sdr_3mm': soft_avg_sdr3,
+            'soft_sdr_5mm': soft_avg_sdr5,
+            'num_samples': sample_count,
+        }
+
+        os.makedirs(self.args.model_output_path, exist_ok=True)
+        result_file = os.path.join(self.args.model_output_path, f'{test_data_name}_test_results.txt')
+        with open(result_file, 'w', encoding='utf-8') as f:
+            f.write("Landmark Test Results\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(f"checkpoint: {getattr(self.args, 'checkpoint', '')}\n")
+            f.write(f"target_size: {tuple(getattr(self.args, 'target_size', (160, 160)))}\n")
+            f.write(f"num_samples: {sample_count}\n\n")
+            f.write("Argmax Metrics:\n")
+            f.write(f"avg_euclidean_distance: {hard_avg_dist:.6f}\n")
+            f.write(f"sdr_3mm: {hard_avg_sdr3:.6f}\n")
+            f.write(f"sdr_5mm: {hard_avg_sdr5:.6f}\n\n")
+            f.write("Gaussian-Fit Metrics:\n")
+            f.write(f"avg_euclidean_distance: {soft_avg_dist:.6f}\n")
+            f.write(f"sdr_3mm: {soft_avg_sdr3:.6f}\n")
+            f.write(f"sdr_5mm: {soft_avg_sdr5:.6f}\n")
+
+        tb_writer.add_scalar(f'Test{test_data_name}/Argmax_EuclideanDist', hard_avg_dist, 0)
+        tb_writer.add_scalar(f'Test{test_data_name}/Argmax_SDR_3mm', hard_avg_sdr3, 0)
+        tb_writer.add_scalar(f'Test{test_data_name}/Argmax_SDR_5mm', hard_avg_sdr5, 0)
+        tb_writer.add_scalar(f'Test{test_data_name}/Gaussian_EuclideanDist', soft_avg_dist, 0)
+        tb_writer.add_scalar(f'Test{test_data_name}/Gaussian_SDR_3mm', soft_avg_sdr3, 0)
+        tb_writer.add_scalar(f'Test{test_data_name}/Gaussian_SDR_5mm', soft_avg_sdr5, 0)
+        self.logger.info(
+            f"Argmax metrics: avg_euclidean_distance={hard_avg_dist:.4f}, "
+            f"sdr_3mm={hard_avg_sdr3:.4f}, sdr_5mm={hard_avg_sdr5:.4f}"
+        )
+        self.logger.info(
+            f"Gaussian-fit metrics: avg_euclidean_distance={soft_avg_dist:.4f}, "
+            f"sdr_3mm={soft_avg_sdr3:.4f}, sdr_5mm={soft_avg_sdr5:.4f}"
+        )
+        self.logger.info(f"Saved test report: {result_file}")
+        return metrics
