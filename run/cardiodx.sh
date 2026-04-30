@@ -4,14 +4,14 @@
 #   --task cardiodx \
 #   --train_data_path ../CardioDx/dataset/train_dataset.pkl \
 #   --val_data_path   ../CardioDx/dataset/val_dataset.pkl \
-#   --model_output_path ./checkpoints/cardiodx \
-#   --tensorboard_output_path ./runs/cardiodx \
+#   --model_output_path ./checkpoints/cardiodx_instance \
+#   --tensorboard_output_path ./runs/cardiodx_instance \
 #   --arch resnet \
 #   --in_channels 3 \
 #   --num_classes 1 \
 #   --target_size 352 \
 #   --target_spacing 1.25 \
-#   --sampling_strategy progressively_balanced \
+#   --sampling_strategy instance \
 #   --iter_per_epoch 200 \
 #   --total_steps 20000 \
 #   --batch_size 16 \
@@ -25,9 +25,9 @@
 
 python main.py --task cardiodx --mode test \
   --test_data_path ./tasks/cardiodx/dataset/test_dataset.pkl \
-  --checkpoint ./checkpoints/cardiodx/best.pt \
-  --model_output_path ./checkpoints/cardiodx \
-  --tensorboard_output_path ./runs/cardiodx_test \
+  --checkpoint ./checkpoints/cardiodx_instance/best.pt \
+  --model_output_path ./checkpoints/cardiodx_instance \
+  --tensorboard_output_path ./runs/cardiodx_instance_test \
   --arch resnet \
   --in_channels 3 \
   --num_classes 1 \
